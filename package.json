@@ -1,0 +1,11 @@
+{
+  "name": "prp-hearing-app",
+  "version": "1.0.0",
+  "description": "PRP再生医療ヒアリングフォーム with AI自動入力",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0"
+  }
+}
