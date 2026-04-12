@@ -1,6 +1,31 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/public/$1" }
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/fetch-clinic.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/generate-docx.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/fetch-clinic",
+      "dest": "/api/fetch-clinic.js"
+    },
+    {
+      "src": "/api/generate-docx",
+      "dest": "/api/generate-docx.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    }
   ]
 }
