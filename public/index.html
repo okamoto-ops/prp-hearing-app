@@ -529,6 +529,33 @@ textarea{resize:vertical}
 </div>
 
 <script>
+// 一時保存・読み込み
+function saveForm() {
+  const data = {};
+  document.querySelectorAll('input[type=text], textarea').forEach(el => { if (el.id) data[el.id] = el.value; });
+  document.querySelectorAll('select').forEach(el => { if (el.id) data[el.id] = el.value; });
+  document.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(el => { if (el.id) data[el.id] = el.checked; });
+  data['_drCounts'] = drCounts;
+  localStorage.setItem('prp_hearing_save', JSON.stringify(data));
+  const time = new Date().toLocaleString('ja-JP');
+  localStorage.setItem('prp_hearing_save_time', time);
+  const el = document.getElementById('saveStatus');
+  if (el) { el.textContent = '保存しました（' + time + '）'; el.style.color = 'var(--green)'; }
+}
+function loadForm() {
+  const raw = localStorage.getItem('prp_hearing_save');
+  const time = localStorage.getItem('prp_hearing_save_time');
+  if (!raw) { const el = document.getElementById('saveStatus'); if(el){el.textContent='保存データがありません';el.style.color='#c0392b';} return; }
+  if (!confirm(time + ' の保存データを読み込みますか？')) return;
+  const data = JSON.parse(raw);
+  document.querySelectorAll('input[type=text], textarea').forEach(el => { if (el.id && data[el.id] !== undefined) el.value = data[el.id]; });
+  document.querySelectorAll('select').forEach(el => { if (el.id && data[el.id] !== undefined) el.value = data[el.id]; });
+  document.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(el => { if (el.id && data[el.id] !== undefined) el.checked = data[el.id]; });
+  toggleType(); toggleEmergency(); updateInsText(); updateLicenseDate(); updProg();
+  const el = document.getElementById('saveStatus');
+  if (el) { el.textContent = '読み込みました（' + time + '）'; el.style.color = 'var(--green)'; }
+}
+
 // 医籍登録年月日
 const eraYears = { '昭和': 64, '平成': 31, '令和': 10 };
 function updateLicenseDate() {
