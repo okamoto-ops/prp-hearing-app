@@ -2,22 +2,10 @@ from http.server import BaseHTTPRequestHandler
 import json
 import os
 import io
+import sys
 from docx import Document
-from docx.oxml.ns import qn
 
-# テンプレートのパスを複数候補で探す
-def find_template():
-    candidates = [
-        os.path.join(os.path.dirname(__file__), 'template.docx'),
-        os.path.join(os.path.dirname(__file__), '..', 'template.docx'),
-        os.path.join(os.getcwd(), 'template.docx'),
-        '/var/task/template.docx',
-        '/var/task/api/template.docx',
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    raise FileNotFoundError(f"template.docx not found. Tried: {candidates}")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), '..', 'template.docx')
 
 def set_cell_text(cell, text):
     for para in cell.paragraphs:
@@ -33,6 +21,7 @@ def set_cell_text(cell, text):
         cell.add_paragraph(text)
 
 def replace_highlighted_text(cell, new_text):
+    from docx.oxml.ns import qn
     for para in cell.paragraphs:
         highlighted_runs = []
         for run in para.runs:
@@ -68,8 +57,7 @@ def build_complaint_text(data):
     )
 
 def fill_template(data):
-    template_path = find_template()
-    doc = Document(template_path)
+    doc = Document(TEMPLATE_PATH)
     t = doc.tables
 
     # 医療機関情報
@@ -82,7 +70,7 @@ def fill_template(data):
     replace_highlighted_text(t[1].rows[4].cells[1], data.get('targetDisease', ''))
     replace_highlighted_text(t[1].rows[5].cells[1], data.get('targetDisease', ''))
 
-    # 実施責任者
+    # 人員
     set_cell_text(t[2].rows[1].cells[4],  data.get('respName', ''))
     set_cell_text(t[2].rows[2].cells[4],  data.get('respOrg', ''))
     set_cell_text(t[2].rows[3].cells[4],  data.get('respDept', ''))
@@ -91,8 +79,6 @@ def fill_template(data):
     set_cell_text(t[2].rows[6].cells[4],  data.get('respPhone', ''))
     set_cell_text(t[2].rows[7].cells[4],  data.get('respEmail', ''))
     set_cell_text(t[2].rows[8].cells[4],  data.get('respRole', ''))
-
-    # 事務担当者
     set_cell_text(t[2].rows[9].cells[4],  data.get('staffName', ''))
     set_cell_text(t[2].rows[10].cells[4], data.get('staffOrg', ''))
     set_cell_text(t[2].rows[11].cells[4], data.get('staffDept', ''))
@@ -101,11 +87,7 @@ def fill_template(data):
     set_cell_text(t[2].rows[14].cells[4], data.get('staffPhone', ''))
     set_cell_text(t[2].rows[15].cells[4], data.get('staffFax', ''))
     set_cell_text(t[2].rows[16].cells[4], data.get('staffEmail', ''))
-
-    # 医師
     fill_doctors(t[2], data.get('doctors', []))
-
-    # 救急搬送先
     set_cell_text(t[2].rows[33].cells[3], data.get('emergencyText', ''))
 
     # 採取方法
@@ -132,6 +114,7 @@ def fill_template(data):
     # 苦情窓口
     set_cell_text(t[14].rows[3].cells[1], build_complaint_text(data))
 
+    # メモリ上に保存して返す
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
@@ -139,33 +122,30 @@ def fill_template(data):
 
 
 class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+
+        # CORS
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        self.send_header('Content-Disposition', 'attachment; filename="様式1-2.docx"')
+
+        try:
+            data = json.loads(body)
+            docx_bytes = fill_template(data)
+            self.send_header('Content-Length', str(len(docx_bytes)))
+            self.end_headers()
+            self.wfile.write(docx_bytes)
+        except Exception as e:
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-
-    def do_POST(self):
-        try:
-            content_length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(content_length)
-            data = json.loads(body)
-            docx_bytes = fill_template(data)
-
-            self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-            self.send_header('Content-Disposition', 'attachment; filename="様式1-2.docx"')
-            self.send_header('Content-Length', str(len(docx_bytes)))
-            self.end_headers()
-            self.wfile.write(docx_bytes)
-
-        except Exception as e:
-            import traceback
-            err = traceback.format_exc()
-            self.send_response(500)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e), 'trace': err}).encode())
